@@ -26,10 +26,10 @@ class PineconeEmbedder:
             self.model.get_sentence_embedding_dimension() == self.dimension
         ), "Dimension mismatch"
 
-        self.vectorstore = Pinecone(self.index, self.model.encode, self.text_field)
+        self.vectorstore = Pinecone(self.index, self.encode, self.text_field)
 
     def encode(self, texts: List[str]):
-        embeddings = self.model.encode(texts)
+        embeddings = self.model.encode(texts).tolist()
         return embeddings
 
     @staticmethod
@@ -41,8 +41,12 @@ class PineconeEmbedder:
             yield chunk
             chunk = tuple(itertools.islice(it, batch_size))
 
-    def upsert_parallel(self, embeddings, namespace="default"):
-        vectors = [(str(ind), emb.tolist()) for ind, emb in enumerate(embeddings)]
+    def upsert_parallel(self, texts, namespace="default"):
+        embeddings = self.encode(texts)
+        
+        vectors = []
+        for ind, data in enumerate(zip(embeddings, texts)):
+            vectors.append((str(ind), data[0], {"text": data[1]}))
 
         # Send requests in parallel
         async_results = [
@@ -57,16 +61,20 @@ class PineconeEmbedder:
 
         return responses
 
-    def upsert(self, embeddings, namespace="default"):
-        # create a list of tuples with id and embedding
-        vectors = [(str(ind), emb.tolist()) for ind, emb in enumerate(embeddings)]
+    def upsert(self, texts, namespace="default"):
+        embeddings = self.encode(texts)
+        
+        vectors = []
+        for ind, data in enumerate(zip(embeddings, texts)):
+            vectors.append((str(ind), data[0], {"text": data[1]}))
+            
         upsert_response = self.index.upsert(vectors=vectors, namespace=namespace)
         assert upsert_response["upserted_count"] == len(
             embeddings
         ), "Upsert count mismatch"
 
         return upsert_response
-    
+
     def index_info(self):
         return self.index.describe_index_stats()
 
@@ -92,8 +100,13 @@ class PineconeEmbedder:
         Returns:
             list: list of ids
         """
-        pass
+        if self.vectorstore is None:
+            raise ValueError("You need to load a sentence transformers model first!")
 
-        query_embeddings = self.model.encode(query_list)
+        return self.vectorstore.similarity_search(
+            query_list,  # our search query
+            k=top_k,  # return 3 most relevant docs
+            namespace=namespace,
+            )
 
         # return query_results[0].ids
