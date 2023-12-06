@@ -1,5 +1,5 @@
 import pinecone
-from typing import List
+from typing import List, Iterable
 import itertools
 from langchain.vectorstores import Pinecone
 from sentence_transformers import SentenceTransformer
@@ -20,7 +20,12 @@ class PineconeEmbedder:
         self.text_field = text_field
         self.vectorstore = None
 
-    def load_model(self, model_path):
+    def load_model(self, model_path: str):
+        """Load a sentence transformers model and create a vectorstore
+
+        Args:
+            model_path (str): model path
+        """
         self.model = SentenceTransformer(model_path)
         assert (
             self.model.get_sentence_embedding_dimension() == self.dimension
@@ -29,11 +34,19 @@ class PineconeEmbedder:
         self.vectorstore = Pinecone(self.index, self.encode, self.text_field)
 
     def encode(self, texts: List[str]):
+        """Encode a list of texts
+
+        Args:
+            texts (List[str]): list of texts
+
+        Returns:
+            2d list: list of embeddings
+        """
         embeddings = self.model.encode(texts).tolist()
         return embeddings
 
     @staticmethod
-    def _chunks(iterable, batch_size=100):
+    def _chunks(iterable: Iterable, batch_size: int = 100):
         """A helper function to break an iterable into chunks of size batch_size."""
         it = iter(iterable)
         chunk = tuple(itertools.islice(it, batch_size))
@@ -41,9 +54,18 @@ class PineconeEmbedder:
             yield chunk
             chunk = tuple(itertools.islice(it, batch_size))
 
-    def upsert_parallel(self, texts, namespace="default"):
+    def upsert_parallel(self, texts: List[str], namespace="default"):
+        """Upsert a list of texts in parallel to pinecone
+
+        Args:
+            texts (List[str]): list of texts
+            namespace (str, optional): pinecone namespace. Defaults to "default".
+
+        Returns:
+            list: api responses
+        """
         embeddings = self.encode(texts)
-        
+
         vectors = []
         for ind, data in enumerate(zip(embeddings, texts)):
             vectors.append((str(ind), data[0], {"text": data[1]}))
@@ -61,13 +83,26 @@ class PineconeEmbedder:
 
         return responses
 
+    def get_retriever(self):
+        """Return the vectorstore object as a retriever for RAG"""
+        return self.vectorstore.as_retriever()
+
     def upsert(self, texts, namespace="default"):
+        """Upsert a list of texts to pinecone
+
+        Args:
+            texts (List[str]): list of texts
+            namespace (str, optional): pinecone namespace. Defaults to "default".
+
+        Returns:
+            UpsertResponse: api responses
+        """
         embeddings = self.encode(texts)
-        
+
         vectors = []
         for ind, data in enumerate(zip(embeddings, texts)):
             vectors.append((str(ind), data[0], {"text": data[1]}))
-            
+
         upsert_response = self.index.upsert(vectors=vectors, namespace=namespace)
         assert upsert_response["upserted_count"] == len(
             embeddings
@@ -76,9 +111,20 @@ class PineconeEmbedder:
         return upsert_response
 
     def index_info(self):
+        """Get index info
+
+        Returns:
+            DescribeIndexStatsResponse: index info
+        """
         return self.index.describe_index_stats()
 
     def delete_id(self, ids: List[str], namespace="default"):
+        """Delete a list of ids
+
+        Args:
+            ids (List[str]): ids to delete
+            namespace (str, optional): pinecone namespace. Defaults to "default".
+        """
         self.index.delete(ids=ids, namespace=namespace)
 
     def delete_namespace(self, namespace="default"):
@@ -107,6 +153,4 @@ class PineconeEmbedder:
             query_list,  # our search query
             k=top_k,  # return 3 most relevant docs
             namespace=namespace,
-            )
-
-        # return query_results[0].ids
+        )
