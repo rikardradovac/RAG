@@ -4,7 +4,7 @@ import itertools
 from langchain.vectorstores import Pinecone
 from sentence_transformers import SentenceTransformer
 
-from .apikey import API_KEY, PINECONE_ENVIRONMENT
+from .config import API_KEY, PINECONE_ENVIRONMENT
 
 pinecone.init(api_key=API_KEY, environment=PINECONE_ENVIRONMENT)
 
