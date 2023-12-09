@@ -154,3 +154,20 @@ class PineconeEmbedder:
             k=top_k,  # return 3 most relevant docs
             namespace=namespace,
         )
+        def augment_prompt(self, query: str, top_k=3, namespace="default"):
+            # Get top results from the knowledge base
+            results = self.query(query_list=[query], top_k=top_k, namespace=namespace)
+    
+            source_knowledge = '\n'.join(x.page_content for x in results)
+            
+    
+            # Feed into an augmented prompt
+            augmented_prompt = f"""Using the contexts below, answer the query.
+    
+            Contexts:
+            {source_knowledge}
+    
+            Query: {query}"""
+            return augmented_prompt
+
+
