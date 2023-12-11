@@ -135,12 +135,12 @@ class PineconeEmbedder:
         """
         self.index.delete(delete_all=True, namespace=namespace)
 
-    def query(self, query_list: List[str], top_k=10, namespace="default"):
+    def query(self, query_list: List[str], top_k=5, namespace="default"):
         """Query the index
 
         Args:
             query_vector (List[str]): the list of queries
-            top_k (int, optional): number of results. Defaults to 10.
+            top_k (int, optional): number of results. Defaults to 5.
             namespace (str, optional): pinecone namespace. Defaults to "default".
 
         Returns:
@@ -151,6 +151,6 @@ class PineconeEmbedder:
 
         return self.vectorstore.similarity_search(
             query_list,  # our search query
-            k=top_k,  # return 3 most relevant docs
+            k=top_k,  # return k most relevant docs
             namespace=namespace,
         )
