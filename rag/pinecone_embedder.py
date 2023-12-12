@@ -17,21 +17,22 @@ class PineconeEmbedder:
         self.index = pinecone.Index(self.index_name, pool_threads=pool_threads)
         self.dimension = self.index.describe_index_stats()["dimension"]
         self.model = None
-        self.text_field = text_field
         self.vectorstore = None
 
-    def load_model(self, model_path: str):
+    def load_model(self, model_path: str, device="cuda"):
         """Load a sentence transformers model and create a vectorstore
 
         Args:
             model_path (str): model path
         """
-        self.model = SentenceTransformer(model_path)
+        self.model = SentenceTransformer(model_path, device=device)
         assert (
             self.model.get_sentence_embedding_dimension() == self.dimension
         ), "Dimension mismatch"
 
-        self.vectorstore = Pinecone(self.index, self.encode, self.text_field)
+    def create_vectorstore(self, namespace="default", text_key="text"):
+        assert self.model is not None, "You need to load a sentence transformers model first!"
+        self.vectorstore = Pinecone(self.index, self.encode, text_key=text_key, namespace=namespace)
 
     def encode(self, texts: List[str]):
         """Encode a list of texts
@@ -134,6 +135,7 @@ class PineconeEmbedder:
             namespace (str, optional): pinecone namespace. Defaults to "default".
         """
         self.index.delete(delete_all=True, namespace=namespace)
+        
 
     def query(self, query_list: List[str], top_k=5, namespace="default"):
         """Query the index
