@@ -135,7 +135,7 @@ class PineconeEmbedder:
             namespace (str, optional): pinecone namespace. Defaults to "default".
         """
         self.index.delete(delete_all=True, namespace=namespace)
-        
+          
 
     def query(self, query_list: List[str], top_k=5, namespace="default"):
         """Query the index

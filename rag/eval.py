@@ -16,9 +16,13 @@ import evaluate
 from .config import HF_AUTH
 import logging
 from .prompts import prompt_template_llama, prompt_template_mistral
+from typing import List
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
-def normalize_answer(s):
+
+def normalize_answer(s: str):
     """Lower text and remove punctuation, articles and extra whitespace."""
 
     def remove_articles(text):
@@ -40,7 +44,7 @@ def normalize_answer(s):
     return white_space_fix(handle_punc(lower(replace_underscore(s)))).strip()
 
 
-def exact_match_score(predictions, ground_truths):
+def exact_match_score(predictions: List[str], ground_truths: List[str]):
     exact_match = evaluate.load("exact_match")
     return exact_match.compute(
         references=ground_truths,
@@ -50,7 +54,7 @@ def exact_match_score(predictions, ground_truths):
     )["exact_match"]
 
 
-def f1_score(prediction, ground_truth):
+def f1_score(prediction: List[str], ground_truth: List[str]):
     prediction_tokens = normalize_answer(prediction).split()
     ground_truth_tokens = normalize_answer(ground_truth).split()
     common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
@@ -63,7 +67,7 @@ def f1_score(prediction, ground_truth):
     return f1
 
 
-def calculate_f1_scores(predictions, ground_truths):
+def calculate_f1_scores(predictions: List[str], ground_truths: List[str]):
     scores = []
     for index in range(len(predictions)):
         result = f1_score(predictions[index], ground_truths[index])
@@ -72,7 +76,11 @@ def calculate_f1_scores(predictions, ground_truths):
     return np.mean(scores)
 
 
-def similarity_search(predictions, ground_truths, model_path="jamesgpt1/sf_model_e5"):
+def similarity_search(
+    predictions: List[str],
+    ground_truths: List[str],
+    model_path: str = "jamesgpt1/sf_model_e5",
+):
     model = SentenceTransformer(model_path)
     predicted_embeddings = model.encode(predictions, convert_to_tensor=True)
     ground_truths = model.encode(ground_truths, convert_to_tensor=True)
@@ -80,7 +88,7 @@ def similarity_search(predictions, ground_truths, model_path="jamesgpt1/sf_model
     return float(scores.mean())
 
 
-def load_llm(model_path):
+def load_llm(model_path: str):
     device = f"cuda:{cuda.current_device()}" if cuda.is_available() else "cpu"
 
     # set quantization configuration to load large model with less GPU memory
@@ -148,7 +156,7 @@ def run_eval(
         chain_type_kwargs={
             "prompt": PromptTemplate(
                 template=prompt_template,
-                input_variables=["summaries", "question"],
+                input_variables=["context", "question"],
             ),
         },
     )
@@ -161,7 +169,7 @@ def run_eval(
         result["answer"] = answer
         results.append(result)
 
-    logging.info("Sucessfully ran RAG pipeline, now evaluating results")
+    logger.info("Sucessfully ran RAG pipeline, now evaluating results")
     predictions = [res["result"] for res in results]
     ground_truths = [res["answer"] for res in results]
 
@@ -178,14 +186,17 @@ def run_eval(
 
 if __name__ == "__main__":
     sentence_embedding_models = ["paraphrase-distilroberta-base-v1", "intfloat/e5-base"]
-    llms = [("meta-llama/Llama-2-13b-chat-hf", prompt_template_llama), ("mistralai/Mistral-7B-Instruct-v0.2", prompt_template_mistral)]
+    llms = [
+        ("meta-llama/Llama-2-13b-chat-hf", prompt_template_llama),
+        ("mistralai/Mistral-7B-Instruct-v0.2", prompt_template_mistral),
+    ]
     data_paths = ["data/rag_data.csv", "data/rag_data2.csv"]
     pinecone_embedder = PineconeEmbedder("rag")
 
     for sentence_emb_name in sentence_embedding_models:
         for gpt_name, prompt_template in llms:
             for data_path in data_paths:
-                logging.info(
+                logger.info(
                     f"Running evaluation for {sentence_emb_name} and {gpt_name} on {data_path}"
                 )
                 result = run_eval(
@@ -193,9 +204,11 @@ if __name__ == "__main__":
                     sentence_emb_name=sentence_emb_name,
                     gpt_name=gpt_name,
                     data_path=data_path,
-                    prompt_template=prompt_template
+                    prompt_template=prompt_template,
                 )
-                logging.info("Saving results")
+                logger.info("Saving results")
+                save_emb_name = "".join(sentence_emb_name.split("/"))
+                save_gpt_name = "".join(gpt_name.split("/"))
                 pd.DataFrame(result).to_csv(
-                    f"results/{sentence_emb_name}_{gpt_name}_{data_path}.csv"
+                    f"results/{save_emb_name}_{save_gpt_name}_{data_path}.csv"
                 )
