@@ -161,9 +161,12 @@ def run_eval(
         },
     )
     results = []
-    data = pd.read_csv(data_path)[:10]
+    data = pd.read_csv(data_path)
     for _, item in data.iterrows():
         query, answer = item[0], item[1]
+        # e5 is trained with prefix
+        if "e5" in sentence_emb_name:
+            query = f"query: {query}"
         result = rag_pipeline(query)
         result["answer"] = answer
         results.append(result)

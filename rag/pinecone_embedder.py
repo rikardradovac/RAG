@@ -19,6 +19,7 @@ class PineconeEmbedder:
         self.dimension = self.index.describe_index_stats()["dimension"]
         self.model = None
         self.vectorstore = None
+        self.model_name = None
 
     def load_model(self, model_path: str, device="cuda"):
         """Load a sentence transformers model and create a vectorstore
@@ -27,6 +28,7 @@ class PineconeEmbedder:
             model_path (str): model path
         """
         self.model = SentenceTransformer(model_path, device=device)
+        self.model_name = model_path
         assert (
             self.model.get_sentence_embedding_dimension() == self.dimension
         ), "Dimension mismatch"
@@ -38,6 +40,10 @@ class PineconeEmbedder:
         self.vectorstore = Pinecone(
             self.index, self.encode, text_key=text_key, namespace=namespace
         )
+    
+    @staticmethod
+    def _add_prefix(texts: List[str], prefix: str = "query: "):
+        return [prefix + text for text in texts]
 
     def encode(self, texts: List[str]):
         """Encode a list of texts
@@ -70,6 +76,10 @@ class PineconeEmbedder:
         Returns:
             list: api responses
         """
+        # need to add prefix
+        if "e5" in self.model_name:
+            texts = self._add_prefix(texts)
+            
         embeddings = self.encode(texts)
 
         vectors = []
@@ -120,6 +130,10 @@ class PineconeEmbedder:
         Returns:
             UpsertResponse: api responses
         """
+        # need to add prefix
+        if "e5" in self.model_name:
+            texts = self._add_prefix(texts)
+            
         embeddings = self.encode(texts)
 
         vectors = []
