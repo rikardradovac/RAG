@@ -1,6 +1,7 @@
 import pandas as pd
 from langchain.vectorstores import Pinecone
 from langchain.chains import RetrievalQA
+from langchain.prompts import PromptTemplate
 from sentence_transformers import SentenceTransformer
 from torch import cuda, bfloat16
 from pinecone_embedder import PineconeEmbedder
@@ -14,6 +15,7 @@ import torch.nn.functional as F
 import evaluate
 from .config import HF_AUTH
 import logging
+from .prompts import prompt_template_llama, prompt_template_mistral
 
 
 def normalize_answer(s):
@@ -40,7 +42,12 @@ def normalize_answer(s):
 
 def exact_match_score(predictions, ground_truths):
     exact_match = evaluate.load("exact_match")
-    return exact_match.compute(references=ground_truths, predictions=predictions, ignore_case=True, ignore_punctuation=True)["exact_match"]
+    return exact_match.compute(
+        references=ground_truths,
+        predictions=predictions,
+        ignore_case=True,
+        ignore_punctuation=True,
+    )["exact_match"]
 
 
 def f1_score(prediction, ground_truth):
@@ -86,7 +93,7 @@ def load_llm(model_path):
     )
 
     # begin initializing HF items, need auth token for these
-    
+
     model_config = transformers.AutoConfig.from_pretrained(
         model_path, use_auth_token=HF_AUTH
     )
@@ -121,14 +128,29 @@ def load_llm(model_path):
     return model
 
 
-def run_eval(pinecone: Pinecone, sentence_emb_name: str, gpt_name: str, data_path: str):
+def run_eval(
+    pinecone: Pinecone,
+    sentence_emb_name: str,
+    gpt_name: str,
+    data_path: str,
+    prompt_template: str,
+):
     pinecone.load_model(sentence_emb_name)
     llm = load_llm(gpt_name)
     pinecone.create_vectorstore(namespace=sentence_emb_name)
     retriever = pinecone.get_retriever()
 
     rag_pipeline = RetrievalQA.from_chain_type(
-        llm=llm, chain_type="stuff", retriever=retriever, return_source_documents=True
+        llm=llm,
+        chain_type="stuff",
+        retriever=retriever,
+        return_source_documents=True,
+        chain_type_kwargs={
+            "prompt": PromptTemplate(
+                template=prompt_template,
+                input_variables=["summaries", "question"],
+            ),
+        },
     )
     results = []
     data = pd.read_csv(data_path)[:10]
@@ -142,25 +164,38 @@ def run_eval(pinecone: Pinecone, sentence_emb_name: str, gpt_name: str, data_pat
     logging.info("Sucessfully ran RAG pipeline, now evaluating results")
     predictions = [res["result"] for res in results]
     ground_truths = [res["answer"] for res in results]
-    
+
     exact_matches = exact_match_score(predictions, ground_truths)
     f1_scores = calculate_f1_scores(predictions, ground_truths)
     similarity_scores = similarity_search(predictions, ground_truths)
-    
-    return {"exact_matches": [exact_matches], "f1_scores": [f1_scores], "similarity_scores": [similarity_scores]}
+
+    return {
+        "exact_matches": [exact_matches],
+        "f1_scores": [f1_scores],
+        "similarity_scores": [similarity_scores],
+    }
 
 
 if __name__ == "__main__":
     sentence_embedding_models = ["paraphrase-distilroberta-base-v1", "intfloat/e5-base"]
-    llms = ["meta-llama/Llama-2-13b-chat-hf", "mistralai/Mistral-7B-Instruct-v0.2"]
+    llms = [("meta-llama/Llama-2-13b-chat-hf", prompt_template_llama), ("mistralai/Mistral-7B-Instruct-v0.2", prompt_template_mistral)]
     data_paths = ["data/rag_data.csv", "data/rag_data2.csv"]
     pinecone_embedder = PineconeEmbedder("rag")
-    
+
     for sentence_emb_name in sentence_embedding_models:
-        for gpt_name in llms:
+        for gpt_name, prompt_template in llms:
             for data_path in data_paths:
-                logging.info(f"Running evaluation for {sentence_emb_name} and {gpt_name} on {data_path}")
-                result = run_eval(pinecone=pinecone_embedder, sentence_emb_name=sentence_emb_name, gpt_name=gpt_name, data_path=data_path)
+                logging.info(
+                    f"Running evaluation for {sentence_emb_name} and {gpt_name} on {data_path}"
+                )
+                result = run_eval(
+                    pinecone=pinecone_embedder,
+                    sentence_emb_name=sentence_emb_name,
+                    gpt_name=gpt_name,
+                    data_path=data_path,
+                    prompt_template=prompt_template
+                )
                 logging.info("Saving results")
-                pd.DataFrame(result).to_csv(f"results/{sentence_emb_name}_{gpt_name}_{data_path}.csv")
-    
+                pd.DataFrame(result).to_csv(
+                    f"results/{sentence_emb_name}_{gpt_name}_{data_path}.csv"
+                )
