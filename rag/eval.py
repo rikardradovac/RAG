@@ -127,7 +127,7 @@ def load_llm(model_path: str):
         tokenizer=tokenizer,
         return_full_text=True,  # langchain expects the full text
         task="text-generation",
-        temperature=0.0,  # 'randomness' of outputs, 0.0 is the min and 1.0 the max
+        temperature=1.0,  # 'randomness' of outputs, 0.0 is the min and 1.0 the max
         max_new_tokens=512,  # mex number of tokens to generate in the output
         repetition_penalty=1.1,  # without this output begins repeating
     )
@@ -164,7 +164,6 @@ def run_eval(
     data = pd.read_csv(data_path)[:10]
     for _, item in data.iterrows():
         query, answer = item[0], item[1]
-        print(query)
         result = rag_pipeline(query)
         result["answer"] = answer
         results.append(result)
