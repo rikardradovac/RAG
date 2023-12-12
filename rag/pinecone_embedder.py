@@ -3,12 +3,13 @@ from typing import List, Iterable
 import itertools
 from langchain.vectorstores import Pinecone
 from sentence_transformers import SentenceTransformer
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from .utils import load_json, generate_random_string
 
 from .config import API_KEY, PINECONE_ENVIRONMENT
 
 pinecone.init(api_key=API_KEY, environment=PINECONE_ENVIRONMENT)
 
-# TODO: fixa bättre ids till index
 
 
 class PineconeEmbedder:
@@ -31,8 +32,12 @@ class PineconeEmbedder:
         ), "Dimension mismatch"
 
     def create_vectorstore(self, namespace="default", text_key="text"):
-        assert self.model is not None, "You need to load a sentence transformers model first!"
-        self.vectorstore = Pinecone(self.index, self.encode, text_key=text_key, namespace=namespace)
+        assert (
+            self.model is not None
+        ), "You need to load a sentence transformers model first!"
+        self.vectorstore = Pinecone(
+            self.index, self.encode, text_key=text_key, namespace=namespace
+        )
 
     def encode(self, texts: List[str]):
         """Encode a list of texts
@@ -68,8 +73,8 @@ class PineconeEmbedder:
         embeddings = self.encode(texts)
 
         vectors = []
-        for ind, data in enumerate(zip(embeddings, texts)):
-            vectors.append((str(ind), data[0], {"text": data[1]}))
+        for _, data in enumerate(zip(embeddings, texts)):
+            vectors.append((generate_random_string(), data[0], {"text": data[1]}))
 
         # Send requests in parallel
         async_results = [
@@ -83,6 +88,23 @@ class PineconeEmbedder:
         responses = [async_result.get() for async_result in async_results]
 
         return responses
+
+    def chunk_document(
+        self, document_path: str, chunk_size: int = 1000, chunk_overlap: int = 100
+    ):
+        """Chunk a document into smaller chunks"""
+
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            length_function=len,
+            add_start_index=True,
+        )
+
+        combined_text = load_json(document_path)
+
+        texts = text_splitter.create_documents([combined_text])
+        return [text.page_content for text in texts]
 
     def get_retriever(self):
         """Return the vectorstore object as a retriever for RAG"""
@@ -101,8 +123,8 @@ class PineconeEmbedder:
         embeddings = self.encode(texts)
 
         vectors = []
-        for ind, data in enumerate(zip(embeddings, texts)):
-            vectors.append((str(ind), data[0], {"text": data[1]}))
+        for _, data in enumerate(zip(embeddings, texts)):
+            vectors.append((generate_random_string(), data[0], {"text": data[1]}))
 
         upsert_response = self.index.upsert(vectors=vectors, namespace=namespace)
         assert upsert_response["upserted_count"] == len(
@@ -135,9 +157,8 @@ class PineconeEmbedder:
             namespace (str, optional): pinecone namespace. Defaults to "default".
         """
         self.index.delete(delete_all=True, namespace=namespace)
-          
 
-    def query(self, query_list: List[str], top_k=5, namespace="default"):
+    def query(self, query_list: List[str], top_k=5, namespace="default", text_key="text"):
         """Query the index
 
         Args:
@@ -148,10 +169,11 @@ class PineconeEmbedder:
         Returns:
             list: list of ids
         """
-        if self.vectorstore is None:
+        if self.model is None:
             raise ValueError("You need to load a sentence transformers model first!")
+        vectorstore = Pinecone(self.index, self.encode, text_key=text_key, namespace=namespace)
 
-        return self.vectorstore.similarity_search(
+        return vectorstore.similarity_search(
             query_list,  # our search query
             k=top_k,  # return k most relevant docs
             namespace=namespace,
