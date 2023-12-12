@@ -13,6 +13,7 @@ import numpy as np
 import torch.nn.functional as F
 import evaluate
 from .config import HF_AUTH
+import logging
 
 
 def normalize_answer(s):
@@ -138,6 +139,7 @@ def run_eval(pinecone: Pinecone, sentence_emb_name: str, gpt_name: str, data_pat
         result["answer"] = answer
         results.append(result)
 
+    logging.info("Sucessfully ran RAG pipeline, now evaluating results")
     predictions = [res["result"] for res in results]
     ground_truths = [res["answer"] for res in results]
     
@@ -145,7 +147,7 @@ def run_eval(pinecone: Pinecone, sentence_emb_name: str, gpt_name: str, data_pat
     f1_scores = calculate_f1_scores(predictions, ground_truths)
     similarity_scores = similarity_search(predictions, ground_truths)
     
-    return {"exact_matches": exact_matches, "f1_scores": f1_scores, "similarity_scores": similarity_scores}
+    return {"exact_matches": [exact_matches], "f1_scores": [f1_scores], "similarity_scores": [similarity_scores]}
 
 
 if __name__ == "__main__":
@@ -157,7 +159,8 @@ if __name__ == "__main__":
     for sentence_emb_name in sentence_embedding_models:
         for gpt_name in llms:
             for data_path in data_paths:
+                logging.info(f"Running evaluation for {sentence_emb_name} and {gpt_name} on {data_path}")
                 result = run_eval(pinecone=pinecone_embedder, sentence_emb_name=sentence_emb_name, gpt_name=gpt_name, data_path=data_path)
-                print(f"Results for {sentence_emb_name} and {gpt_name} on {data_path}: {result}")
+                logging.info("Saving results")
                 pd.DataFrame(result).to_csv(f"results/{sentence_emb_name}_{gpt_name}_{data_path}.csv")
     
