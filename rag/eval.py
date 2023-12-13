@@ -18,9 +18,9 @@ import logging
 import os
 from .prompts import prompt_template_llama, prompt_template_mistral
 from typing import List
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-
 
 
 def normalize_answer(s: str):
@@ -212,7 +212,8 @@ if __name__ == "__main__":
                 logger.info("Saving results")
                 save_emb_name = "".join(sentence_emb_name.split("/"))
                 save_gpt_name = "".join(gpt_name.split("/"))
+                save_data_path = data_path.split("/")[-1]
                 os.makedirs("results", exist_ok=True)
                 pd.DataFrame(result).to_csv(
-                    f"results/{save_emb_name}_{save_gpt_name}_{data_path}.csv"
+                    f"results/{save_emb_name}_{save_gpt_name}_{save_data_path}.csv"
                 )
