@@ -23,11 +23,8 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def normalize_answer(s: str):
-    """Lower text and remove punctuation, articles and extra whitespace."""
-
-    def remove_articles(text):
-        return re.sub(r"\b(a|an|the)\b", " ", text)
+def clean_answer(answer: str):
+    """Cleans the answer for evaluation"""
 
     def white_space_fix(text):
         return " ".join(text.split())
@@ -42,7 +39,7 @@ def normalize_answer(s: str):
     def replace_underscore(text):
         return text.replace("_", " ")
 
-    return white_space_fix(handle_punc(lower(replace_underscore(s)))).strip()
+    return white_space_fix(handle_punc(lower(replace_underscore(answer)))).strip()
 
 
 def exact_match_score(predictions: List[str], ground_truths: List[str]):
@@ -56,8 +53,8 @@ def exact_match_score(predictions: List[str], ground_truths: List[str]):
 
 
 def f1_score(prediction: List[str], ground_truth: List[str]):
-    prediction_tokens = normalize_answer(prediction).split()
-    ground_truth_tokens = normalize_answer(ground_truth).split()
+    prediction_tokens = clean_answer(prediction).split()
+    ground_truth_tokens = clean_answer(ground_truth).split()
     common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
     num_same = sum(common.values())
     if num_same == 0:
