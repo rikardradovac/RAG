@@ -15,6 +15,7 @@ import torch.nn.functional as F
 import evaluate
 from .config import HF_AUTH
 import logging
+import os
 from .prompts import prompt_template_llama, prompt_template_mistral
 from typing import List
 logger = logging.getLogger(__name__)
@@ -211,6 +212,7 @@ if __name__ == "__main__":
                 logger.info("Saving results")
                 save_emb_name = "".join(sentence_emb_name.split("/"))
                 save_gpt_name = "".join(gpt_name.split("/"))
+                os.makedirs("results", exist_ok=True)
                 pd.DataFrame(result).to_csv(
                     f"results/{save_emb_name}_{save_gpt_name}_{data_path}.csv"
                 )
