@@ -4,7 +4,7 @@ from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from sentence_transformers import SentenceTransformer
 from torch import cuda, bfloat16
-from pinecone_embedder import PineconeEmbedder
+from .pinecone_embedder import PineconeEmbedder
 import transformers
 from langchain.llms import HuggingFacePipeline
 from collections import Counter
