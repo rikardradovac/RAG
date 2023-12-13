@@ -49,6 +49,7 @@ def exact_match_score(predictions: List[str], ground_truths: List[str]):
         predictions=predictions,
         ignore_case=True,
         ignore_punctuation=True,
+        regexes_to_ignore="\n:",
     )["exact_match"]
 
 

@@ -11,9 +11,8 @@ from .config import API_KEY, PINECONE_ENVIRONMENT
 pinecone.init(api_key=API_KEY, environment=PINECONE_ENVIRONMENT)
 
 
-
 class PineconeEmbedder:
-    def __init__(self, index_name, pool_threads=30, text_field="text"):
+    def __init__(self, index_name, pool_threads=30):
         self.index_name = index_name
         self.index = pinecone.Index(self.index_name, pool_threads=pool_threads)
         self.dimension = self.index.describe_index_stats()["dimension"]
@@ -40,7 +39,7 @@ class PineconeEmbedder:
         self.vectorstore = Pinecone(
             self.index, self.encode, text_key=text_key, namespace=namespace
         )
-    
+
     @staticmethod
     def _add_prefix(texts: List[str], prefix: str = "query: "):
         return [prefix + text for text in texts]
@@ -79,7 +78,7 @@ class PineconeEmbedder:
         # need to add prefix
         if "e5" in self.model_name:
             texts = self._add_prefix(texts)
-            
+
         embeddings = self.encode(texts)
 
         vectors = []
@@ -100,7 +99,7 @@ class PineconeEmbedder:
         return responses
 
     def chunk_document(
-        self, document_path: str, chunk_size: int = 1000, chunk_overlap: int = 100
+        self, document_path: str, chunk_size: int = 300, chunk_overlap: int = 20
     ):
         """Chunk a document into smaller chunks"""
 
@@ -111,10 +110,15 @@ class PineconeEmbedder:
             add_start_index=True,
         )
 
-        combined_text = load_json(document_path)
+        extracted_text = load_json(document_path)
 
-        texts = text_splitter.create_documents([combined_text])
-        return [text.page_content for text in texts]
+        all_chunks = []
+        for chunk in extracted_text:
+            texts = text_splitter.create_documents([chunk])
+            texts = [text.page_content for text in texts]
+            all_chunks.extend(texts)
+
+        return all_chunks
 
     def get_retriever(self):
         """Return the vectorstore object as a retriever for RAG"""
@@ -133,7 +137,7 @@ class PineconeEmbedder:
         # need to add prefix
         if "e5" in self.model_name:
             texts = self._add_prefix(texts)
-            
+
         embeddings = self.encode(texts)
 
         vectors = []
@@ -172,7 +176,9 @@ class PineconeEmbedder:
         """
         self.index.delete(delete_all=True, namespace=namespace)
 
-    def query(self, query_list: List[str], top_k=5, namespace="default", text_key="text"):
+    def query(
+        self, query_list: List[str], top_k=5, namespace="default", text_key="text"
+    ):
         """Query the index
 
         Args:
@@ -185,7 +191,9 @@ class PineconeEmbedder:
         """
         if self.model is None:
             raise ValueError("You need to load a sentence transformers model first!")
-        vectorstore = Pinecone(self.index, self.encode, text_key=text_key, namespace=namespace)
+        vectorstore = Pinecone(
+            self.index, self.encode, text_key=text_key, namespace=namespace
+        )
 
         return vectorstore.similarity_search(
             query_list,  # our search query
