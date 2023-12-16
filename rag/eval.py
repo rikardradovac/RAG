@@ -9,7 +9,6 @@ import transformers
 from langchain.llms import HuggingFacePipeline
 from collections import Counter
 import string
-import re
 import numpy as np
 import torch.nn.functional as F
 import evaluate
@@ -43,6 +42,15 @@ def clean_answer(answer: str):
 
 
 def exact_match_score(predictions: List[str], ground_truths: List[str]):
+    """Computes exact match score
+
+    Args:
+        predictions (List[str]): List of outputs
+        ground_truths (List[str]): List of answers
+
+    Returns:
+        float: mean exact match score
+    """
     exact_match = evaluate.load("exact_match")
     return exact_match.compute(
         references=ground_truths,
@@ -53,7 +61,16 @@ def exact_match_score(predictions: List[str], ground_truths: List[str]):
     )["exact_match"]
 
 
-def f1_score(prediction: List[str], ground_truth: List[str]):
+def f1_score(prediction: str, ground_truth: str):
+    """Computes f1 score
+
+    Args:
+        prediction (str): output
+        ground_truth (str): answer
+
+    Returns:
+        float: mean f1 score
+    """
     prediction_tokens = clean_answer(prediction).split()
     ground_truth_tokens = clean_answer(ground_truth).split()
     common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
@@ -67,6 +84,15 @@ def f1_score(prediction: List[str], ground_truth: List[str]):
 
 
 def calculate_f1_scores(predictions: List[str], ground_truths: List[str]):
+    """Computes f1 score
+
+    Args:
+        predictions (List[str]): List of outputs
+        ground_truths (List[str]): List of answers
+
+    Returns:
+        float: mean f1 score
+    """
     scores = []
     for index in range(len(predictions)):
         result = f1_score(predictions[index], ground_truths[index])
@@ -80,6 +106,16 @@ def similarity_search(
     ground_truths: List[str],
     model_path: str = "jamesgpt1/sf_model_e5",
 ):
+    """Computes similarity score
+
+    Args:
+        predictions (List[str]): List of outputs
+        ground_truths (List[str]): List of answers
+        model_path (str, optional): Embedding model to use. Defaults to "jamesgpt1/sf_model_e5".
+
+    Returns:
+        float: mean cosine similarity score
+    """
     model = SentenceTransformer(model_path)
     predicted_embeddings = model.encode(predictions, convert_to_tensor=True)
     ground_truths = model.encode(ground_truths, convert_to_tensor=True)
@@ -88,18 +124,23 @@ def similarity_search(
 
 
 def load_llm(model_path: str):
+    """Loads a large language model in 4bit quantization
+
+    Args:
+        model_path (str): huggingface model path
+
+    Returns:
+        HuggingFacePipeline: llm pipeline
+    """
     device = f"cuda:{cuda.current_device()}" if cuda.is_available() else "cpu"
 
     # set quantization configuration to load large model with less GPU memory
-    # this requires the `bitsandbytes` library
     bnb_config = transformers.BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
         bnb_4bit_use_double_quant=True,
         bnb_4bit_compute_dtype=bfloat16,
     )
-
-    # begin initializing HF items, need auth token for these
 
     model_config = transformers.AutoConfig.from_pretrained(
         model_path, use_auth_token=HF_AUTH
@@ -115,7 +156,7 @@ def load_llm(model_path: str):
     )
     model.eval()
 
-    print(f"Model loaded on {device}")
+    logger.info(f"Model loaded on {device}")
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         model_path, use_auth_token=HF_AUTH
@@ -124,11 +165,11 @@ def load_llm(model_path: str):
     generate_text = transformers.pipeline(
         model=model,
         tokenizer=tokenizer,
-        return_full_text=True,  # langchain expects the full text
+        return_full_text=True, 
         task="text-generation",
-        temperature=1.0,  # 'randomness' of outputs, 0.0 is the min and 1.0 the max
-        max_new_tokens=512,  # mex number of tokens to generate in the output
-        repetition_penalty=1.1,  # without this output begins repeating
+        temperature=1.0,  
+        max_new_tokens=512, 
+        repetition_penalty=1.1, # reduces repetiton
     )
 
     model = HuggingFacePipeline(pipeline=generate_text)
@@ -142,6 +183,18 @@ def run_eval(
     data_path: str,
     prompt_template: str,
 ):
+    """Runs evaluation
+
+    Args:
+        pinecone (Pinecone): Pinecone index
+        sentence_emb_name (str): sentence embedding model path
+        gpt_name (str): gpt model path
+        data_path (str): path to csv data
+        prompt_template (str): prompt to use
+
+    Returns:
+        dict: mean f1, exact match and similarity scores
+    """
     pinecone.load_model(sentence_emb_name)
     llm = load_llm(gpt_name)
     pinecone.create_vectorstore(namespace=sentence_emb_name)
@@ -186,6 +239,7 @@ def run_eval(
 
 
 if __name__ == "__main__":
+    # change these to run different experiments
     sentence_embedding_models = ["paraphrase-distilroberta-base-v1", "intfloat/e5-base"]
     llms = [
         ("meta-llama/Llama-2-13b-chat-hf", prompt_template_llama),

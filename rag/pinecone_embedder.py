@@ -33,6 +33,12 @@ class PineconeEmbedder:
         ), "Dimension mismatch"
 
     def create_vectorstore(self, namespace="default", text_key="text"):
+        """Create a vectorstore
+
+        Args:
+            namespace (str, optional): Pinecone namespace to use. Defaults to "default".
+            text_key (str, optional): Text key. Defaults to "text".
+        """
         assert (
             self.model is not None
         ), "You need to load a sentence transformers model first!"
